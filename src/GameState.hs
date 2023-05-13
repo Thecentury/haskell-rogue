@@ -63,4 +63,9 @@ forAllTilesDo :: (Tile -> Tile) -> (GameState -> GameState)
 forAllTilesDo func = over (gameBoard.tiles) (fmap func)
 
 getPlayer :: GameState -> Creature
-getPlayer gs = head $ filter (isPlayer) $ gs^.creatures
+getPlayer gs = head $ filter isPlayer $ gs^.creatures
+
+setPlayer :: Creature -> GameState -> GameState
+setPlayer player = creatures %~ update where
+    update :: [Creature] -> [Creature]
+    update = map (\c -> if isPlayer c then player else c)

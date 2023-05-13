@@ -42,12 +42,12 @@ theApp =
 
         -- function which takes gameState & an Event and returns mutated gameState
       , BMain.appHandleEvent = IN.handleInput
-      , BMain.appStartEvent = return
+      , BMain.appStartEvent = pure ()
       , BMain.appAttrMap = const theMap
       }
 
 main :: IO ()
 main = do
     rng <- getStdGen
-    dialog <- BMain.defaultMain theApp (GS.initialState rng)
+    _dialog <- BMain.defaultMain theApp (GS.initialState rng)
     putStrLn "End"

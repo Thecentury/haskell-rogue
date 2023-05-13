@@ -11,6 +11,7 @@ where
 import qualified Data.Map as M
 import Data.Maybe  (fromJust, isJust)
 import Data.List   (delete, find)
+import Control.Monad.State.Strict ( modify )
 -- import System.Random
 
 
@@ -41,30 +42,30 @@ makeLenses '' ActionResult
 type Action = (GameState -> ActionResult)
 
 -- https://github.com/jtdaugherty/brick/blob/master/docs/guide.rst#apphandleevent-handling-events
-handleInput :: GameState -> T.BrickEvent () e -> T.EventM () (T.Next GameState)
-handleInput gs (T.VtyEvent ev) =
+handleInput :: T.BrickEvent () e -> T.EventM () GameState ()
+handleInput (T.VtyEvent ev) =
     case ev of
         -- the empty list [] is the list of mod keys
-        V.EvKey V.KEsc []   -> BMain.halt gs    -- press ESC to quit
+        V.EvKey V.KEsc []   -> BMain.halt    -- press ESC to quit
 
         -- use numpad keys and match on number range to get movement
-        V.EvKey (V.KChar k) [] | k `elem` ['0'..'9'] -> BMain.continue (fullGameTurn (handleMoveInput k) gs)
+        V.EvKey (V.KChar k) [] | k `elem` ['0'..'9'] -> modify $ fullGameTurn (handleMoveInput k)
 
         -- Temporary testing: when player presses 'a' attempt to attack the first monster in list
         --V.EvKey (V.KChar 'a') [] -> BMain.continue (fullGameTurn (actionMelee 0) gs)
 
         -- Or arrow key movement
-        V.EvKey V.KUp       []  -> BMain.continue (fullGameTurn (actionMove ( 0,-1) ) gs)
-        V.EvKey V.KDown     []  -> BMain.continue (fullGameTurn (actionMove ( 0, 1) ) gs)
-        V.EvKey V.KLeft     []  -> BMain.continue (fullGameTurn (actionMove (-1, 0) ) gs)
-        V.EvKey V.KRight    []  -> BMain.continue (fullGameTurn (actionMove ( 1, 0) ) gs)
+        V.EvKey V.KUp       []  -> modify $ fullGameTurn (actionMove ( 0,-1) )
+        V.EvKey V.KDown     []  -> modify $ fullGameTurn (actionMove ( 0, 1) )
+        V.EvKey V.KLeft     []  -> modify $ fullGameTurn (actionMove (-1, 0) )
+        V.EvKey V.KRight    []  -> modify $ fullGameTurn (actionMove ( 1, 0) )
 
         -- for a key which does nothing, do nothing (redraw identical)
         -- could optionally print "That key does nothing!" or something?
-        _                   -> BMain.continue gs
+        _                   -> pure ()
 
 -- Wasn't even a T.VtyEvent
-handleInput gs _ = BMain.continue gs
+handleInput _ = pure ()
 
 actionNothing :: Action
 actionNothing gs = ActionResult { _costsTurn = False, _gameState = gs }
@@ -153,7 +154,7 @@ actionMove move gs
         targetTile      = fromJust $ M.lookup attempt (gs^.gameBoard.tiles)
 
         -- No message for moving, too spammy
-        result_success  = ActionResult True  resulting_gs
+        result_success  = ActionResult True  $ setPlayer resulting_player gs
         -- Return unchanged gs + message
         result_fail     = ActionResult False (addMessage "That's a wall!" gs)
 
@@ -162,13 +163,14 @@ actionMove move gs
 actionMelee :: Creature -> Action
 actionMelee target gs
 
-    | inMeleeRange (gs^.player.cInfo.position) (target^.cInfo.position) = result_success
+    | inMeleeRange (player ^. cInfo.position) (target^.cInfo.position) = result_success
     | otherwise = result_fail
     where
         -- Note that we add the message first, then damage, so as to come before the death message, etc
         result_success  = ActionResult True  (damageMonster (addMessage "attacked!" gs) target Physical dmg)
         result_fail     = ActionResult False ( addMessage "Out of range!" gs)
         dmg = 1
+        player = getPlayer gs
 --        dmg             = fst (rng_result)
 --        rng_result      = randomR (1,6) (gs^.rng) :: (Int, StdGen)
 --        new_gs          = over (rng) (set (snd rng_result)) gs
